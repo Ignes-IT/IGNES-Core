@@ -10,17 +10,26 @@ const execAsync = promisify(exec);
 const generateKeys = async () => {
   const { stdout: privateKeyRaw } = await execAsync('wg genkey');
   const privateKey = privateKeyRaw.trim();
-  const { stdout: publicKeyRaw } = await execAsync(`echo ${privateKey} | wg pubkey`);
+  const { stdout: publicKeyRaw } = await execAsync(`echo "${privateKey}" | wg pubkey`);
   const publicKey = publicKeyRaw.trim();
   return { privateKey, publicKey };
 };
 
 export const createDevice = async (req: Request, res: Response) => {
   const { name } = req.body;
-  const userId = (req as any).user.userId;
+  const userId = (req as any).user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 
   try {
     const { privateKey, publicKey } = await generateKeys();
+
+    // Простая стратегия для MVP: count + 2 → 10.0.0.2, 10.0.0.3, ...
+    const deviceCount = await prisma.device.count();
+    const ipAddress = `10.0.0.${deviceCount + 2}`;
+
     const device = await prisma.device.create({
       data: {
         id: crypto.randomUUID(),
@@ -28,41 +37,53 @@ export const createDevice = async (req: Request, res: Response) => {
         name,
         publicKey,
         privateKey,
+        ipAddress,
       },
     });
 
     res.status(201).json({ deviceId: device.id, publicKey: device.publicKey });
   } catch (error) {
-    console.error(error);
+    console.error('createDevice error:', error);
     res.status(500).json({ message: 'Failed to create device' });
   }
 };
 
 export const getConfig = async (req: Request, res: Response) => {
   const { uuid } = req.params;
+  const userId = (req as any).user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 
   try {
-    const device = await prisma.device.findUnique({ where: { id: uuid as string } });
+    const device = await prisma.device.findFirst({
+      where: { id: uuid as string, userId },
+    });
+
     if (!device) {
       return res.status(404).json({ message: 'Device not found' });
     }
 
-    const config = `
-[Interface]
+    const wgConfig = `[Interface]
 PrivateKey = ${device.privateKey}
-Address = 10.0.0.${device.id}/32
+Address = ${device.ipAddress}/32
 DNS = ${env.wireguardDns}
 
 [Peer]
 PublicKey = ${env.serverPublicKey}
 Endpoint = ${env.wireguardEndpoint}
-AllowedIPs = 0.0.0.0/0`.trim();
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25`;
 
     res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="wg-${device.id}.conf"`);
-    res.send(config);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="wg-${device.id}.conf"`
+    );
+    res.send(wgConfig);
   } catch (error) {
-    console.error(error);
+    console.error('getConfig error:', error);
     res.status(500).json({ message: 'Failed to generate config' });
   }
 };

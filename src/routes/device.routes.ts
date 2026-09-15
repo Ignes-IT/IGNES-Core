@@ -6,7 +6,9 @@ import { deviceCreateSchema } from '@ignes/shared';
 
 const router = Router();
 
-router.post('/devices', authMiddleware, validate(deviceCreateSchema), createDevice);
+router.use(authMiddleware);
+
+router.post('/devices', validate(deviceCreateSchema), createDevice);
 router.get('/vpn/config/:uuid', getConfig);
 
 export default router;
