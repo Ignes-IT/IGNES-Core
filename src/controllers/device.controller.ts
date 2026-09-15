@@ -25,8 +25,6 @@ export const createDevice = async (req: Request, res: Response) => {
 
   try {
     const { privateKey, publicKey } = await generateKeys();
-
-    // Простая стратегия для MVP: count + 2 → 10.0.0.2, 10.0.0.3, ...
     const deviceCount = await prisma.device.count();
     const ipAddress = `10.0.0.${deviceCount + 2}`;
 
@@ -87,3 +85,28 @@ PersistentKeepalive = 25`;
     res.status(500).json({ message: 'Failed to generate config' });
   }
 };
+
+export const getDevices = async (req: Request, res: Response) => {
+    const userId = (req as any).user?.userId;
+
+    if(!userId) {
+        return res.status(401).json({ message: 'Unauthorized'});
+    }
+
+    try {
+        const devices = await prisma.device.findMany({
+            where: { userId }, select: {
+                id: true,
+                name: true,
+                publicKey: true,
+                ipAddress: true,
+                createdAt: true,
+            },
+            orderBy: { createdAt: 'desc'},
+        });
+        res.json({ devices });
+    } catch (error) {
+        console.error('getDevices error:', error);
+        res.status(500).json({ message: 'Failed to get devices '})
+    }
+}
