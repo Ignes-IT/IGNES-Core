@@ -110,3 +110,30 @@ export const getDevices = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Failed to get devices '})
     }
 }
+
+export const deleteDevice = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
+  
+  if (!userId) {
+    res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  const id  = req.params.id as string;
+
+  try {
+    const result = await prisma.device.deleteMany({
+      where: {
+        id, userId,
+      },
+    });
+
+    if (result.count === 0) {
+      return res.status(404).json({ message: 'Device not found' });
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('deleteDevice error', error);
+    res.status(500).json({ message: 'Failed to delete device' });
+  }
+};
