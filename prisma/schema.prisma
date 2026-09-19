@@ -52,8 +52,9 @@ model Subscription {
 }
 
 enum Plan {
-  BASIC
-  PREMIUM
+  FREE
+  TRIAL
+  PRO
   BUSINESS
 }
 
@@ -61,5 +62,4 @@ enum SubStatus {
   ACTIVE
   EXPIRED
   CANCELLED
-  TRIAL
 }
