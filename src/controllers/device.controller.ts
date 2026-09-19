@@ -115,7 +115,7 @@ export const deleteDevice = async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
   
   if (!userId) {
-    res.status(401).json({ message: 'Unauthorized' });
+    return res.status(401).json({ message: 'Unauthorized' });
   }
 
   const id  = req.params.id as string;
