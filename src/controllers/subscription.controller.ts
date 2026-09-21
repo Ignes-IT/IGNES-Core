@@ -22,3 +22,53 @@ export const getMySubscription = async (req: Request, res: Response) => {
 
     return res.json({ subscription });
 };
+
+const TRIAL_DURATION_DAYS = 7;
+
+export const createTrialSubscription = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  const now = new Date();
+
+  const activeSubscription = await prisma.subscription.findFirst({
+    where: {
+      userId,
+      status: 'ACTIVE',
+      OR: [
+        { endDate: null },
+        { endDate: { gt: now } },
+      ],
+    },
+  });
+
+  if (activeSubscription) {
+    return res.status(409).json({ message: 'You already have an active subscription' });
+  }
+
+  const previousTrial = await prisma.subscription.findFirst({
+    where: { userId, plan: 'TRIAL' },
+  });
+
+  if (previousTrial) {
+    return res.status(409).json({ message: 'Trial has already been used' });
+  }
+
+  const endDate = new Date(now);
+  endDate.setDate(endDate.getDate() + TRIAL_DURATION_DAYS);
+
+  const subscription = await prisma.subscription.create({
+    data: {
+      userId,
+      plan: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: now,
+      endDate,
+    },
+  });
+
+  return res.status(201).json({ subscription });
+};
