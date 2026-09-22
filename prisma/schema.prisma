@@ -44,7 +44,7 @@ model Subscription {
   status     SubStatus @default(ACTIVE)
   startDate  DateTime @default(now())
   endDate    DateTime?
-  autoRenew  Boolean  @default(true)
+  autoRenew  Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

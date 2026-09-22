@@ -67,6 +67,7 @@ export const createTrialSubscription = async (req: Request, res: Response) => {
       status: 'ACTIVE',
       startDate: now,
       endDate,
+      autoRenew: false,
     },
   });
 
