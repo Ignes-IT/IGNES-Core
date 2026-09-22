@@ -4,6 +4,8 @@ import { config as env } from '../config/environment';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import crypto from 'crypto';
+import { getUserActivePlan } from '../services/subscription.service';
+import { DEVICE_LIMITS } from '../config/plans';
 
 const execAsync = promisify(exec);
 
@@ -15,7 +17,7 @@ const generateKeys = async () => {
   return { privateKey, publicKey };
 };
 
-export const createDevice = async (req: Request, res: Response) => {
+export const createDevice = async ( req: Request, res: Response) => {
   const { name } = req.body;
   const userId = (req as any).user?.userId;
 
@@ -24,9 +26,22 @@ export const createDevice = async (req: Request, res: Response) => {
   }
 
   try {
+    const plan = await getUserActivePlan(userId);
+    const deviceLimit = DEVICE_LIMITS[plan];
+
+    const userDeviceCount = await prisma.device.count({
+      where: {userId},
+    });
+
+    if (userDeviceCount >= deviceLimit) {
+      return res.status(409).json({
+        message: `Device limit reached for ${plan} plan (${deviceLimit})`,
+      });
+    }
+
     const { privateKey, publicKey } = await generateKeys();
-    const deviceCount = await prisma.device.count();
-    const ipAddress = `10.0.0.${deviceCount + 2}`;
+    const totalDeviceCount = await prisma.device.count();
+    const ipAddress = `10.0.0.${totalDeviceCount + 2}`;
 
     const device = await prisma.device.create({
       data: {
@@ -39,10 +54,10 @@ export const createDevice = async (req: Request, res: Response) => {
       },
     });
 
-    res.status(201).json({ deviceId: device.id, publicKey: device.publicKey });
+    return res.status(201).json({ deviceId: device.id, publicKey: device.publicKey});
   } catch (error) {
     console.error('createDevice error:', error);
-    res.status(500).json({ message: 'Failed to create device' });
+    return res.status(500).json({ message: 'Failed to create device'})
   }
 };
 
