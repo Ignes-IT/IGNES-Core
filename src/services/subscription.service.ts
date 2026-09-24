@@ -1,10 +1,13 @@
 import { prisma } from '../config/prisma';
-import { Plan } from '@prisma/client';
+import { Plan, Subscription } from '@prisma/client';
 
-export const getUserActivePlan = async ( userId: number): Promise<Plan> => {
-    const subscription = await prisma.subscription.findFirst({
+export const getActiveSubscription = async (
+    userId: number
+): Promise<Subscription | null> => {
+    return prisma.subscription.findFirst({
         where: {
-            userId, status: 'ACTIVE',
+            userId,
+            status: 'ACTIVE',
             OR: [
                 { endDate: null },
                 { endDate: { gt: new Date() } },
@@ -12,6 +15,9 @@ export const getUserActivePlan = async ( userId: number): Promise<Plan> => {
         },
         orderBy: { createdAt: 'desc' },
     });
+};
 
+export const getUserActivePlan = async (userId: number): Promise<Plan> => {
+    const subscription = await getActiveSubscription(userId);
     return subscription?.plan ?? 'FREE';
-}
+};

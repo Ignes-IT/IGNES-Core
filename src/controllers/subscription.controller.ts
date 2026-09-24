@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
+import { getActiveSubscription } from '../services/subscription.service';
 
 export const getMySubscription = async (req: Request, res: Response) => {
     const userId = (req as any).user?.userId;
@@ -8,17 +9,7 @@ export const getMySubscription = async (req: Request, res: Response) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const subscription = await prisma.subscription.findFirst({
-        where: {
-            userId,
-            status: 'ACTIVE',
-            OR: [
-                { endDate: null },
-                { endDate: { gt: new Date() } },
-            ],
-        },
-        orderBy: { createdAt: 'desc' },
-    });
+    const subscription = await getActiveSubscription(userId);
 
     return res.json({ subscription });
 };
@@ -34,16 +25,7 @@ export const createTrialSubscription = async (req: Request, res: Response) => {
 
   const now = new Date();
 
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      userId,
-      status: 'ACTIVE',
-      OR: [
-        { endDate: null },
-        { endDate: { gt: now } },
-      ],
-    },
-  });
+  const activeSubscription = await getActiveSubscription(userId);
 
   if (activeSubscription) {
     return res.status(409).json({ message: 'You already have an active subscription' });
