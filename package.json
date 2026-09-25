@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "test:db:migrate": "dotenv -e .env.test -- prisma migrate deploy",
+    "test:db:reset": "dotenv -e .env.test -- prisma migrate reset --force --skip-seed"
   },
   "keywords": [
     "ignes",
@@ -34,6 +36,7 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.11.0",
     "@types/supertest": "^7.2.1",
+    "dotenv-cli": "^11.0.0",
     "jest": "^30.5.2",
     "prisma": "^5.18.0",
     "supertest": "^7.3.0",
