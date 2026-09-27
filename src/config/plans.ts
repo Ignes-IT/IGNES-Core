@@ -6,3 +6,12 @@ export const DEVICE_LIMITS: Record<Plan, number> = {
     PRO: 10,
     BUSINESS: 50,
 }; 
+
+export const PLAN_PRICES: Record<Plan, number> = {
+    FREE: 0,
+    TRIAL: 0,
+    PRO: 299,
+    BUSINESS: 999,
+};
+
+export const TRIAL_DURATION_DAYS = 7;
