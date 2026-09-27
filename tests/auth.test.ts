@@ -97,3 +97,53 @@ describe('JWT payload', () => {
     expect(payload).not.toHaveProperty('password');
   });
 });
+
+describe('GET /api/auth/me', () => {
+  it('returns current user profile with valid token', async () => {
+    const register = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'me@test.dev', password: 'password123' });
+
+    const token = register.body.token;
+
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user).toMatchObject({
+      email: 'me@test.dev',
+      role: 'user',
+    });
+    expect(res.body.user).toHaveProperty('id');
+    expect(res.body.user).toHaveProperty('createdAt');
+  });
+
+  it('does not leak password', async () => {
+    const register = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'leak@test.dev', password: 'password123' });
+
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${register.body.token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user).not.toHaveProperty('password');
+  });
+
+  it('returns 401 without token', async () => {
+    const res = await request(app).get('/api/auth/me');
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('No token provided');
+  });
+
+  it('returns 401 with invalid token', async () => {
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer not-a-real-token');
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Invalid token');
+  });
+});
