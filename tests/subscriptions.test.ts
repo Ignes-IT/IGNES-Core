@@ -147,3 +147,72 @@ describe('Plan limit after subscription', () => {
     expect(r4.body.message).toMatch(/limit/i);
   });
 });
+
+describe('GET /api/subscriptions/me — enriched fields', () => {
+  it('includes deviceLimit, deviceCount, daysRemaining', async () => {
+    const { token } = await registerUser('enriched@test.dev');
+
+    await request(app)
+      .post('/api/subscriptions')
+      .set('Authorization', `Bearer ${token}`);
+
+    const res = await request(app)
+      .get('/api/subscriptions/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.subscription).toMatchObject({
+      plan: 'TRIAL',
+      deviceLimit: 3,
+      deviceCount: 0,
+      daysRemaining: 7,
+    });
+  });
+
+  it('deviceCount reflects created devices', async () => {
+    const { token } = await registerUser('enrcount@test.dev');
+
+    await request(app)
+      .post('/api/subscriptions')
+      .set('Authorization', `Bearer ${token}`);
+
+    await request(app)
+      .post('/api/devices')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'D1' });
+
+    await request(app)
+      .post('/api/devices')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'D2' });
+
+    const res = await request(app)
+      .get('/api/subscriptions/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.body.subscription.deviceCount).toBe(2);
+  });
+
+  it('daysRemaining is null for subscription without endDate', async () => {
+    const { token, id } = await registerUser('forever@test.dev');
+
+    await prisma.subscription.create({
+      data: {
+        userId: id,
+        plan: 'PRO',
+        status: 'ACTIVE',
+        startDate: new Date(),
+        endDate: null,
+      },
+    });
+
+    const res = await request(app)
+      .get('/api/subscriptions/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.subscription.endDate).toBeNull();
+    expect(res.body.subscription.daysRemaining).toBeNull();
+    expect(res.body.subscription.deviceLimit).toBe(10);
+  });
+});

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
-import { getActiveSubscription } from '../services/subscription.service';
+import { getActiveSubscription, getSubscriptionSummary } from '../services/subscription.service';
 
 export const getMySubscription = async (req: Request, res: Response) => {
     const userId = (req as any).user?.userId;
@@ -9,10 +9,12 @@ export const getMySubscription = async (req: Request, res: Response) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const subscription = await getActiveSubscription(userId);
+    const subscription = await getSubscriptionSummary(userId);
 
     return res.json({ subscription });
 };
+
+
 
 const TRIAL_DURATION_DAYS = 7;
 
