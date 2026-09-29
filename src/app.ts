@@ -4,13 +4,13 @@ import authRoutes from './routes/auth.routes';
 import deviceRoutes from './routes/device.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import planRoutes from './routes/plan.routes';
-import brandRouters from './routes/brand.routes';
+import brandRoutes from './routes/brand.routes';
 import { prisma } from './config/prisma';
 
 export const app = express();
 
 app.use(
-    cors({ 
+    cors({
         origin: ['http://localhost:3001'],
         credentials: true,
     })
@@ -19,8 +19,8 @@ app.use(
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
-app.use('/api/subscriptions', subscriptionRoutes)
-app.use('/api/brand', brandRouters);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/brand', brandRoutes);
 app.use('/api/plans', planRoutes);
 
 app.use('/api', deviceRoutes);
