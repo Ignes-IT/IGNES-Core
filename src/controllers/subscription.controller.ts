@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { getActiveSubscription, getSubscriptionSummary } from '../services/subscription.service';
+import { TRIAL_DURATION_DAYS } from '../config/plans';
 
 export const getMySubscription = async (req: Request, res: Response) => {
     const userId = (req as any).user?.userId;
@@ -13,10 +14,6 @@ export const getMySubscription = async (req: Request, res: Response) => {
 
     return res.json({ subscription });
 };
-
-
-
-const TRIAL_DURATION_DAYS = 7;
 
 export const createTrialSubscription = async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
