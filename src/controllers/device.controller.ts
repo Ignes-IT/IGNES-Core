@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../config/prisma';
 import { config as env } from '../config/environment';
 import { exec } from 'child_process';
@@ -9,6 +10,17 @@ import { DEVICE_LIMITS } from '../config/plans';
 
 const execAsync = promisify(exec);
 
+const createDeviceSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Name is required')
+    .max(32, 'Name must be at most 32 characters')
+    .regex(
+      /^[a-zA-Z0-9 _-]+$/,
+      'Name may contain only letters, digits, spaces, underscores, and hyphens',
+    ),
+});
+
 const generateKeys = async () => {
   const { stdout: privateKeyRaw } = await execAsync('wg genkey');
   const privateKey = privateKeyRaw.trim();
@@ -17,20 +29,48 @@ const generateKeys = async () => {
   return { privateKey, publicKey };
 };
 
-export const createDevice = async ( req: Request, res: Response) => {
-  const { name } = req.body;
+const allocateIp = async (): Promise<string> => {
+  const prefix = env.wireguardSubnetPrefix;
+  const existing = await prisma.device.findMany({
+    where: { ipAddress: { not: null } },
+    select: { ipAddress: true },
+  });
+  const used = new Set(
+    existing
+      .map((d) => d.ipAddress)
+      .filter((ip): ip is string => ip !== null),
+  );
+  for (let host = 2; host <= 254; host++) {
+    const candidate = `${prefix}.${host}`;
+    if (!used.has(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error('No available IP addresses left in subnet');
+};
+
+export const createDevice = async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
 
   if (!userId) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
+  const parsed = createDeviceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: 'Invalid request body',
+      errors: parsed.error.flatten().fieldErrors,
+    });
+  }
+  const { name } = parsed.data;
+
   try {
     const plan = await getUserActivePlan(userId);
     const deviceLimit = DEVICE_LIMITS[plan];
 
     const userDeviceCount = await prisma.device.count({
-      where: {userId},
+      where: { userId },
     });
 
     if (userDeviceCount >= deviceLimit) {
@@ -40,8 +80,7 @@ export const createDevice = async ( req: Request, res: Response) => {
     }
 
     const { privateKey, publicKey } = await generateKeys();
-    const totalDeviceCount = await prisma.device.count();
-    const ipAddress = `10.0.0.${totalDeviceCount + 2}`;
+    const ipAddress = await allocateIp();
 
     const device = await prisma.device.create({
       data: {
@@ -54,10 +93,10 @@ export const createDevice = async ( req: Request, res: Response) => {
       },
     });
 
-    return res.status(201).json({ deviceId: device.id, publicKey: device.publicKey});
+    return res.status(201).json({ deviceId: device.id, publicKey: device.publicKey });
   } catch (error) {
     console.error('createDevice error:', error);
-    return res.status(500).json({ message: 'Failed to create device'})
+    return res.status(500).json({ message: 'Failed to create device' });
   }
 };
 
@@ -78,6 +117,10 @@ export const getConfig = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Device not found' });
     }
 
+    if (!device.ipAddress) {
+      return res.status(500).json({ message: 'Device has no IP address assigned' });
+    }
+
     const wgConfig = `[Interface]
 PrivateKey = ${device.privateKey}
 Address = ${device.ipAddress}/32
@@ -86,13 +129,13 @@ DNS = ${env.wireguardDns}
 [Peer]
 PublicKey = ${env.serverPublicKey}
 Endpoint = ${env.wireguardEndpoint}
-AllowedIPs = 0.0.0.0/0
+AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25`;
 
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="wg-${device.id}.conf"`
+      `attachment; filename="wg-${device.id}.conf"`,
     );
     res.send(wgConfig);
   } catch (error) {
@@ -102,53 +145,52 @@ PersistentKeepalive = 25`;
 };
 
 export const getDevices = async (req: Request, res: Response) => {
-    const userId = (req as any).user?.userId;
-
-    if(!userId) {
-        return res.status(401).json({ message: 'Unauthorized'});
-    }
-
-    try {
-        const devices = await prisma.device.findMany({
-            where: { userId }, select: {
-                id: true,
-                name: true,
-                publicKey: true,
-                ipAddress: true,
-                createdAt: true,
-            },
-            orderBy: { createdAt: 'desc'},
-        });
-        res.json({ devices });
-    } catch (error) {
-        console.error('getDevices error:', error);
-        res.status(500).json({ message: 'Failed to get devices '})
-    }
-}
-
-export const deleteDevice = async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
-  
+
   if (!userId) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
-  const id  = req.params.id as string;
+  try {
+    const devices = await prisma.device.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        name: true,
+        publicKey: true,
+        ipAddress: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return res.json({ devices });
+  } catch (error) {
+    console.error('getDevices error:', error);
+    return res.status(500).json({ message: 'Failed to get devices' });
+  }
+};
+
+export const deleteDevice = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  const id = req.params.id as string;
 
   try {
     const result = await prisma.device.deleteMany({
-      where: {
-        id, userId,
-      },
+      where: { id, userId },
     });
 
     if (result.count === 0) {
       return res.status(404).json({ message: 'Device not found' });
     }
 
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    console.error('deleteDevice error', error);
-    res.status(500).json({ message: 'Failed to delete device' });
+    console.error('deleteDevice error:', error);
+    return res.status(500).json({ message: 'Failed to delete device' });
   }
 };
