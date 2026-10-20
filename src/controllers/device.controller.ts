@@ -7,7 +7,8 @@ import { promisify } from 'util';
 import crypto from 'crypto';
 import { getUserActivePlan } from '../services/subscription.service';
 import { DEVICE_LIMITS } from '../config/plans';
-import * as vpnService from '../services/vpn.service'; // ← NEW
+import * as vpnService from '../services/vpn.service';
+import { renderObfuscationLines } from '../config/obfuscation'; 
 
 const execAsync = promisify(exec);
 
@@ -156,16 +157,25 @@ export const getConfig = async (req: Request, res: Response) => {
       return res.status(500).json({ message: 'Device has no IP address assigned' });
     }
 
-    const wgConfig = `[Interface]
-PrivateKey = ${device.privateKey}
-Address = ${device.ipAddress}/32
-DNS = ${env.wireguardDns}
+    const ifaceLines = [
+      '[Interface]',
+      `PrivateKey = ${device.privateKey}`,
+      `Address = ${device.ipAddress}/32`,
+      `DNS = ${env.wireguardDns}`,
+    ];
+    if (vpnService.isEnabled()) {
+      ifaceLines.push(...renderObfuscationLines());
+    }
 
-[Peer]
-PublicKey = ${env.serverPublicKey}
-Endpoint = ${env.wireguardEndpoint}
-AllowedIPs = 0.0.0.0/0, ::/0
-PersistentKeepalive = 25`;
+    const wgConfig = [
+      ...ifaceLines,
+      '',
+      '[Peer]',
+      `PublicKey = ${env.serverPublicKey}`,
+      `Endpoint = ${env.wireguardEndpoint}`,
+      `AllowedIPs = 0.0.0.0/0, ::/0`,
+      `PersistentKeepalive = 25`,
+    ].join('\n');
 
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader(
