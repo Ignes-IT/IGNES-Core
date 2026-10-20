@@ -7,6 +7,7 @@ import { promisify } from 'util';
 import crypto from 'crypto';
 import { getUserActivePlan } from '../services/subscription.service';
 import { DEVICE_LIMITS } from '../config/plans';
+import * as vpnService from '../services/vpn.service'; // ← NEW
 
 const execAsync = promisify(exec);
 
@@ -29,17 +30,23 @@ const generateKeys = async () => {
   return { privateKey, publicKey };
 };
 
-const allocateIp = async (): Promise<string> => {
+const allocateIp = async (
+  extraReserved: Set<string> = new Set(),
+): Promise<string> => {
   const prefix = env.wireguardSubnetPrefix;
   const existing = await prisma.device.findMany({
     where: { ipAddress: { not: null } },
     select: { ipAddress: true },
   });
-  const used = new Set(
-    existing
-      .map((d) => d.ipAddress)
-      .filter((ip): ip is string => ip !== null),
-  );
+  const used = new Set<string>();
+  for (const d of existing) {
+    if (d.ipAddress) {
+      used.add(d.ipAddress);
+    }
+  }
+  for (const ip of extraReserved) {
+    used.add(ip);
+  }
   for (let host = 2; host <= 254; host++) {
     const candidate = `${prefix}.${host}`;
     if (!used.has(candidate)) {
@@ -80,7 +87,21 @@ export const createDevice = async (req: Request, res: Response) => {
     }
 
     const { privateKey, publicKey } = await generateKeys();
-    const ipAddress = await allocateIp();
+
+    const serverIps = new Set<string>();
+    if (vpnService.isEnabled()) {
+      try {
+        const peers = await vpnService.listPeers();
+        for (const p of peers) {
+          serverIps.add(p.allowed_ips.replace('/32', ''));
+        }
+      } catch (err) {
+        console.error('listPeers failed:', err);
+        return res.status(503).json({ message: 'VPN server unavailable' });
+      }
+    }
+
+    const ipAddress = await allocateIp(serverIps);
 
     const device = await prisma.device.create({
       data: {
@@ -93,7 +114,21 @@ export const createDevice = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(201).json({ deviceId: device.id, publicKey: device.publicKey });
+    if (vpnService.isEnabled()) {
+      try {
+        await vpnService.addPeer(device.id, publicKey, ipAddress);
+      } catch (err) {
+        console.error('addPeer failed, rolling back device:', err);
+        await prisma.device.delete({ where: { id: device.id } });
+        return res.status(503).json({ message: 'VPN server unavailable' });
+      }
+    }
+
+    return res.status(201).json({
+      deviceId: device.id,
+      publicKey: device.publicKey,
+      ipAddress: device.ipAddress,
+    });
   } catch (error) {
     console.error('createDevice error:', error);
     return res.status(500).json({ message: 'Failed to create device' });
@@ -180,6 +215,23 @@ export const deleteDevice = async (req: Request, res: Response) => {
   const id = req.params.id as string;
 
   try {
+    const device = await prisma.device.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!device) {
+      return res.status(404).json({ message: 'Device not found' });
+    }
+
+    if (vpnService.isEnabled()) {
+      try {
+        await vpnService.removePeer(device.id);
+      } catch (err) {
+        console.error('removePeer failed (continuing):', err);
+      }
+    }
+
     const result = await prisma.device.deleteMany({
       where: { id, userId },
     });
