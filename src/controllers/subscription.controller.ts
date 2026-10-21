@@ -54,3 +54,45 @@ export const createTrialSubscription = async (req: Request, res: Response) => {
 
   return res.status(201).json({ subscription });
 };
+
+export const mockUpgrade = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 30);
+
+    const existingSubscription = await prisma.subscription.findFirst({
+      where: { userId }
+    });
+
+    let subscription;
+
+    if (existingSubscription) {
+      subscription = await prisma.subscription.update({
+        where: { id: existingSubscription.id },
+        data: {
+          plan: 'PRO',
+          status: 'ACTIVE',
+          endDate
+        }
+      });
+    } else {
+      subscription = await prisma.subscription.create({
+        data: {
+          userId,
+          plan: 'PRO',
+          status: 'ACTIVE',
+          startDate: new Date(),
+          endDate,
+        }
+      });
+    }
+
+    res.json({ message: 'Mock upgrade to PRO successful', subscription });
+  } catch (error) {
+    console.error('Mock upgrade error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

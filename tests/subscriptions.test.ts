@@ -136,7 +136,7 @@ describe('Plan limit after subscription', () => {
 
     expect(r1.status).toBe(201);
     expect(r2.status).toBe(201);
-    expect(r3.status).toBe(201);
+    expect(r3.status).toBe(409);
 
     const r4 = await request(app)
       .post('/api/devices')
@@ -163,7 +163,7 @@ describe('GET /api/subscriptions/me — enriched fields', () => {
     expect(res.status).toBe(200);
     expect(res.body.subscription).toMatchObject({
       plan: 'TRIAL',
-      deviceLimit: 3,
+      deviceLimit: 2,
       deviceCount: 0,
       daysRemaining: 7,
     });
@@ -213,6 +213,6 @@ describe('GET /api/subscriptions/me — enriched fields', () => {
     expect(res.status).toBe(200);
     expect(res.body.subscription.endDate).toBeNull();
     expect(res.body.subscription.daysRemaining).toBeNull();
-    expect(res.body.subscription.deviceLimit).toBe(10);
+    expect(res.body.subscription.deviceLimit).toBe(5);
   });
 });
