@@ -163,9 +163,7 @@ export const getConfig = async (req: Request, res: Response) => {
       `Address = ${device.ipAddress}/32`,
       `DNS = ${env.wireguardDns}`,
     ];
-    if (vpnService.isEnabled()) {
-      ifaceLines.push(...renderObfuscationLines());
-    }
+    ifaceLines.push(...renderObfuscationLines());
 
     const wgConfig = [
       ...ifaceLines,
