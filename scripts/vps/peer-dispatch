@@ -1,0 +1,33 @@
+#!/bin/bash
+# SSH forced command dispatcher for peer management.
+# Validates argument count and shape. No eval, no word splitting.
+set -euo pipefail
+read -r -a parts <<< "${SSH_ORIGINAL_COMMAND:-}"
+cmd="${parts[0]:-}"
+
+UUID_RE='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+PUBKEY_RE='^[A-Za-z0-9+/]{43}=$'
+IP_RE='^10\.9\.9\.([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$'
+
+case "$cmd" in
+  peer-list)
+    [[ ${#parts[@]} -eq 1 ]] || { echo '{"ok":false,"error":"bad args: peer-list takes no arguments"}' >&2; exit 2; }
+    exec /usr/local/bin/peer-list
+    ;;
+  peer-add)
+    [[ ${#parts[@]} -eq 4 ]] || { echo '{"ok":false,"error":"bad args: peer-add <uuid> <pubkey> <ip>"}' >&2; exit 2; }
+    [[ "${parts[1]}" =~ $UUID_RE   ]] || { echo '{"ok":false,"error":"bad uuid"}' >&2; exit 2; }
+    [[ "${parts[2]}" =~ $PUBKEY_RE ]] || { echo '{"ok":false,"error":"bad pubkey"}' >&2; exit 2; }
+    [[ "${parts[3]}" =~ $IP_RE     ]] || { echo '{"ok":false,"error":"bad ip"}' >&2; exit 2; }
+    exec /usr/local/bin/peer-add "${parts[1]}" "${parts[2]}" "${parts[3]}"
+    ;;
+  peer-remove)
+    [[ ${#parts[@]} -eq 2 ]] || { echo '{"ok":false,"error":"bad args: peer-remove <uuid>"}' >&2; exit 2; }
+    [[ "${parts[1]}" =~ $UUID_RE ]] || { echo '{"ok":false,"error":"bad uuid"}' >&2; exit 2; }
+    exec /usr/local/bin/peer-remove "${parts[1]}"
+    ;;
+  *)
+    echo '{"ok":false,"error":"forbidden"}' >&2
+    exit 2
+    ;;
+esac
