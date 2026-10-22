@@ -1,4 +1,4 @@
-node_modules/
+qnode_modules/
 dist/
 .env
 .env.*

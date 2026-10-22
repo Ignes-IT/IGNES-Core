@@ -7,8 +7,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      # pg_isready проверяет, что Postgres реально принимает соединения,
-      # а не просто "контейнер запущен"
       test: ["CMD-SHELL", "pg_isready -U ignes -d ignes"]
       interval: 5s
       timeout: 3s
@@ -23,12 +21,9 @@ services:
     env_file:
       - core.env
     ports:
-      # 127.0.0.1 — только на localhost, наружу не торчит.
-      # Nginx на хосте проксирует через proxy_pass http://127.0.0.1:3000;
       - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
-        # Ждать "ready", а не просто "started" — защита от гонки при старте
         condition: service_healthy
 
 volumes:
