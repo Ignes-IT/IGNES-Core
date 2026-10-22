@@ -1,20 +1,19 @@
 
-# ============================================================
-# Stage 1: builder — устанавливаем ВСЕ зависимости и собираем
-# ============================================================
+
+# Stage 1: builder 
 FROM node:20-slim AS builder
 
-# openssl нужен Prisma для native engine на Debian
+# openssl 
 RUN apt-get update -qq && apt-get install -y -qq openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 1) Сначала — IGNES-Shared, потому что Core от него зависит через file:../
+# 1)IGNES-Shared
 COPY IGNES-Shared/ ./IGNES-Shared/
 WORKDIR /app/IGNES-Shared
 RUN npm ci && npm run build
 
-# 2) Теперь Core
+# 2)Core
 WORKDIR /app
 COPY IGNES-Core/ ./IGNES-Core/
 WORKDIR /app/IGNES-Core
@@ -22,12 +21,10 @@ RUN npm ci
 RUN npx prisma generate
 RUN npm run build
 
-# Убираем devDependencies — в runner они не нужны
+# rm devDependencies 
 RUN npm prune --omit=dev
 
-# ============================================================
-# Stage 2: runner — только то, что нужно для запуска
-# ============================================================
+# Stage 2: runner 
 FROM node:20-slim AS runner
 RUN apt-get update -qq && apt-get install -y -qq \
     openssl \
@@ -37,9 +34,6 @@ RUN apt-get update -qq && apt-get install -y -qq \
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Копируем обе папки целиком из builder.
-# Это проще и надёжнее, чем хирургически вытаскивать dist + .prisma:
-# file:..-зависимость требует, чтобы IGNES-Shared был рядом с Core.
 COPY --from=builder /app/IGNES-Shared/ /app/IGNES-Shared/
 COPY --from=builder /app/IGNES-Core/ /app/IGNES-Core/
 
