@@ -86,4 +86,28 @@ export const me = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteMe = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 
+  try {
+    const deviceCount = await prisma.device.count({ where: { userId } });
+    if (deviceCount > 0) {
+      return res.status(409).json({
+        message: 'Cannot delete user with active devices',
+        deviceCount,
+      });
+    }
+
+    await prisma.user.delete({ where: { id: userId } });
+    return res.status(204).send();
+  } catch (error: any) {
+    if (error?.code === 'P2025') {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    console.error('deleteMe error:', error);
+    return res.status(500).json({ message: 'Failed to delete user' });
+  }
+};
