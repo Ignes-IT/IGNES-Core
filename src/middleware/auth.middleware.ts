@@ -9,16 +9,21 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     return res.status(401).json({ message: 'No token provided' });
   }
 
-  let decoded: { userId: string; email: string };
+  let decoded: { userId: string | number; email: string };
   try {
-    decoded = jwt.verify(token, config.jwtSecret) as { userId: string; email: string };
+    decoded = jwt.verify(token, config.jwtSecret) as { userId: string | number; email: string };
   } catch {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+
+  const userId = Number(decoded.userId);
+  if (!Number.isInteger(userId) || userId <= 0) {
     return res.status(401).json({ message: 'Invalid token' });
   }
 
   try {
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: userId },
       select: { id: true },
     });
     if (!user) {
@@ -29,6 +34,6 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     return res.status(500).json({ message: 'Internal server error' });
   }
 
-  (req as any).user = decoded;
+  (req as any).user = { userId, email: decoded.email };
   next();
 };
