@@ -1,4 +1,4 @@
-// src/services/vpn.service.ts
+
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { config } from '../config/environment';
@@ -18,7 +18,6 @@ interface ScriptResponse {
   data?: unknown;
 }
 
-// Defense-in-depth: валидация до ssh (wrapper делает unquoted arg splitting).
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PUBKEY_RE = /^[A-Za-z0-9+/]{43}=$/;
 const IPV4_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
@@ -38,6 +37,10 @@ async function runSshCommand(command: string): Promise<unknown> {
     '-o', 'IdentitiesOnly=yes',
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=10',
+    '-o', 'StrictHostKeyChecking=no',
+    '-o', 'UserKnownHostsFile=/dev/null',
+    '-o', 'ServerAliveInterval=15',
+    '-o', 'ServerAliveCountMax=2',
     `${user}@${host}`,
     command,
   ];
@@ -50,11 +53,9 @@ async function runSshCommand(command: string): Promise<unknown> {
     });
     stdout = result.stdout;
   } catch (err: any) {
-    // ssh exit 255 = network/connection failure (не exit-код скрипта).
     if (err.code === 255) {
       throw new Error('VPN server unavailable');
     }
-    // Скрипт вернул non-zero → скорее всего JSON-ошибка в stdout.
     stdout = err.stdout ?? '';
     if (!stdout) {
       throw new Error(err.message || 'VPN command failed');

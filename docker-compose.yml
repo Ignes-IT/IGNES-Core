@@ -25,6 +25,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ignes_ssh_keys:/root/.ssh
 
 volumes:
   pgdata:
+  ignes_ssh_keys:
